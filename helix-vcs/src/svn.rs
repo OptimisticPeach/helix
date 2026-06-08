@@ -41,12 +41,12 @@ pub fn get_current_head_name(file: &Path) -> Result<Arc<ArcSwap<Box<str>>>> {
     debug_assert!(!file.exists() || file.is_file());
     debug_assert!(file.is_absolute());
 
-    let file = file.to_str().context("Could not convert path to UTF8")?;
+    let mut rev = svn::Revnum::invalid();
 
-    let mut rev = (svn::Revnum::invalid(), svn::Revnum::invalid());
+    match svn::wc::Context::new().and_then(|mut v| {
+        let status = v.status(file)?;
 
-    match svn::client::Context::new().and_then(|mut v| {
-        rev = v.min_max_revisions(file, true)?;
+        rev = status.revision();
 
         Ok(())
     }) {
@@ -57,14 +57,12 @@ pub fn get_current_head_name(file: &Path) -> Result<Arc<ArcSwap<Box<str>>>> {
         }
     };
 
-    let (_min, max) = rev;
-
-    if max == svn::Revnum::invalid() {
+    if rev == svn::Revnum::invalid() {
         bail!("Couldn't fetch svn revision number");
     }
 
     Ok(Arc::new(ArcSwap::from_pointee(
-        format!("R:{}", max.as_i64()).into_boxed_str(),
+        format!("R:{}", rev.as_i64()).into_boxed_str(),
     )))
 }
 
